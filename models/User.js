@@ -8,16 +8,21 @@ const userSchema = new mongoose.Schema({
   phone_number: { type: String, required: true },
   password: { type: String, required: true },
   profile_picture: { type: String },
-  front_picture: { type: String },
-  back_picture: { type: String },
   role: { type: String, enum: ["user", "admin"], default: "user" },
   total_earnings: { type: Number, default: 0 },
   bank_account_number: { type: String },
   bank_code: { type: String },
-  my_tickets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }] // New field for storing booked tickets
+  my_tickets: [{ type: mongoose.Schema.Types.ObjectId, ref: "Event" }],
+
+  gender: {
+    type: String,
+    enum: ["male", "female", "other"],
+    required: true,
+  },
+
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 });
-
-
 
 const User = mongoose.model("User", userSchema);
 

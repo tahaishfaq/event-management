@@ -17,22 +17,20 @@ exports.registerUser = async (req, res) => {
     email,
     phone_number,
     password,
-    front_picture,
-    back_picture,
-    profile_picture
+    profile_picture,
+    gender,  // Include gender in the request body
   } = req.body;
-
-  if (!front_picture || !back_picture || !profile_picture) {
-    return res
-      .status(400)
-      .json({ message: "All Pictures are required" });
-  }
 
   try {
     // Check if the email is already registered
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "Email already exists" });
+    }
+
+    // Validate the gender field
+    if (!["male", "female", "other"].includes(gender)) {
+      return res.status(400).json({ message: "Invalid gender" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -42,9 +40,8 @@ exports.registerUser = async (req, res) => {
       email,
       phone_number,
       password: hashedPassword,
-      front_picture,
-      back_picture,
-      profile_picture
+      profile_picture,
+      gender,  // Save gender in the user model
     });
 
     await newUser.save();
@@ -141,7 +138,7 @@ exports.getMyTickets = async (req, res) => {
       path: "my_tickets",
       populate: {
         path: "created_by",
-        select: "fullname email",
+        select: "fullname email profile_picture",
       },
     });
 
@@ -266,6 +263,81 @@ exports.requestWithdrawal = async (req, res) => {
     } else {
       res.status(400).json({ message: "Transfer failed" });
     }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.followUser = async (req, res) => {
+  const userId = req.user.id;
+  const { followId } = req.params; // ID of the user to follow
+
+  try {
+    const user = await User.findById(userId);
+    const followUser = await User.findById(followId);
+
+    if (!followUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Add the followId to the following array if not already followed
+    if (!user.following.includes(followId)) {
+      user.following.push(followId);
+      await user.save();
+    }
+
+    // Add the userId to the followers array of the followUser
+    if (!followUser.followers.includes(userId)) {
+      followUser.followers.push(userId);
+      await followUser.save();
+    }
+
+    res.status(200).json({ message: "User followed successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.unfollowUser = async (req, res) => {
+  const userId = req.user.id;
+  const { followId } = req.params; // ID of the user to unfollow
+
+  try {
+    const user = await User.findById(userId);
+    const followUser = await User.findById(followId);
+
+    if (!followUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Remove the followId from the following array
+    user.following = user.following.filter(id => id.toString() !== followId);
+    await user.save();
+
+    // Remove the userId from the followers array of the followUser
+    followUser.followers = followUser.followers.filter(id => id.toString() !== userId);
+    await followUser.save();
+
+    res.status(200).json({ message: "User unfollowed successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.getUserById = async (req, res) => {
+  const { userId } = req.params; // Get the user ID from the request parameters
+
+  try {
+    // Find the user by ID and exclude the password
+    const user = await User.findById(userId).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

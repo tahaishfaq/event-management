@@ -10,4 +10,11 @@ router.get('/view/:eventId', eventController.getEventById);
 router.post('/book/:eventId', authMiddleware, eventController.bookEvent);
 router.get('/verify-payment-callback', authMiddleware, eventController.verifyPaymentCallback);
 
+router.delete('/delete', eventController.deleteAllEvents);
+
+router.get('/get-my-events', authMiddleware, eventController.getUserEvents)
+
+router.get('/guests/:eventId', authMiddleware, eventController.getEventGuests);
+
+
 module.exports = router;
