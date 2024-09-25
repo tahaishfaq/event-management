@@ -21,4 +21,10 @@ router.post("/unfollow/:followId", auth, userController.unfollowUser);
 
 router.get("/profile/:userId", userController.getUserById);
 
+router.get('/get-followers/:userId',  userController.getFollowers);
+
+router.get('/get-following/:userId',  userController.getFollowing);
+
+router.get('/withdrawals-history', auth, userController.getWithdrawalHistory);
+
 module.exports = router;

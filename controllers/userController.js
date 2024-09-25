@@ -7,7 +7,7 @@ const {
   initiateTransfer,
   chargeCard,
 } = require("../utils/paystack");
-
+const Withdrawal = require('../models/Withdrawal');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.registerUser = async (req, res) => {
@@ -197,28 +197,22 @@ exports.getMyTickets = async (req, res) => {
 
 exports.requestWithdrawal = async (req, res) => {
   const userId = req.user.id;
-  const { card_number, card_expiry_month, card_expiry_year, card_cvv } =
-    req.body;
+  const { card_number, card_expiry_month, card_expiry_year, card_cvv } = req.body;
 
   try {
     const user = await User.findById(userId);
-
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const amountToWithdraw = user.total_earnings * 100; // Paystack amount should be in kobo (NGN)
+    const amountToWithdraw = user.total_earnings * 100; // Amount in kobo
 
     if (amountToWithdraw <= 5000) {
-      // Ensure amount is greater than NGN 50
-      return res
-        .status(400)
-        .json({
-          message: "Amount must be greater than NGN 50 to request a withdrawal",
-        });
+      return res.status(400).json({
+        message: "Amount must be greater than NGN 50 to request a withdrawal",
+      });
     }
 
-    // Charge the card to get authorization code
     const chargeResponse = await chargeCard(user.email, amountToWithdraw, {
       card_number,
       card_expiry_month,
@@ -226,40 +220,31 @@ exports.requestWithdrawal = async (req, res) => {
       card_cvv,
     });
 
-    console.log(chargeResponse?.data);
-
     if (chargeResponse.data.status !== "success") {
       return res.status(400).json({ message: "Failed to charge card" });
     }
 
-    const authorization_code =
-      chargeResponse.data.authorization.authorization_code;
-
-    // Create transfer recipient using the authorization code
-    const recipientData = await createTransferRecipient(
-      authorization_code,
-      user.fullname
-    );
+    const authorization_code = chargeResponse.data.authorization.authorization_code;
+    const recipientData = await createTransferRecipient(authorization_code, user.fullname);
     const recipient_code = recipientData.data.recipient_code;
 
-    // Initiate transfer
-    const transferData = await initiateTransfer(
-      amountToWithdraw,
-      recipient_code
-    );
+    const transferData = await initiateTransfer(amountToWithdraw, recipient_code);
+
+    // Save withdrawal history
+    const withdrawal = new Withdrawal({
+      user: userId,
+      amount: amountToWithdraw,
+      status: transferData.status === "success" ? 'completed' : 'failed',
+    });
+    await withdrawal.save();
 
     if (transferData.status === "success") {
-      // Update user's earnings
-      user.total_earnings -= amount;
+      user.total_earnings -= amountToWithdraw / 100; // Convert back to NGN
       await user.save();
-
-      res
-        .status(200)
-        .json({
-          message:
-            "Withdrawal request successful. Amount transferred to your card.",
-          amount: amountToWithdraw / 100,
-        });
+      res.status(200).json({
+        message: "Withdrawal request successful. Amount transferred to your card.",
+        amount: amountToWithdraw / 100,
+      });
     } else {
       res.status(400).json({ message: "Transfer failed" });
     }
@@ -338,6 +323,52 @@ exports.getUserById = async (req, res) => {
     }
 
     res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+// Fetch followers of a user
+exports.getFollowers = async (req, res) => {
+  const { userId } = req.params; 
+
+  try {
+    const user = await User.findById(userId).populate('followers', 'fullname profile_picture');
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user.followers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Fetch users that a user is following
+exports.getFollowing = async (req, res) => {
+  const { userId } = req.params; 
+
+  try {
+    const user = await User.findById(userId).populate('following', 'fullname profile_picture');
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user.following);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getWithdrawalHistory = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const withdrawals = await Withdrawal.find({ user: userId }).sort({ createdAt: -1 }); // Sort by newest first
+    res.status(200).json(withdrawals);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

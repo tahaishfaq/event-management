@@ -12,9 +12,17 @@ router.get('/verify-payment-callback', authMiddleware, eventController.verifyPay
 
 router.delete('/delete', eventController.deleteAllEvents);
 
-router.get('/get-my-events', authMiddleware, eventController.getUserEvents)
+router.get('/get-my-events', authMiddleware, eventController.getMyEvents)
 
 router.get('/guests/:eventId', authMiddleware, eventController.getEventGuests);
+
+
+router.get('/getEventsByUserId/:userId', eventController.getEventsByUserId)
+
+
+router.get('/members/:eventId', eventController.getJoinedMembers);
+
+
 
 
 module.exports = router;
